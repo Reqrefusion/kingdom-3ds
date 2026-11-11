@@ -1,0 +1,121 @@
+name: Build 3DSX (Windows)
+run-name: Windows 3DSX (source ${{ github.event.workflow_run.id || github.run_id }})
+
+on:
+  workflow_run:
+    workflows: [Build 3DSX]
+    types: [requested]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release name (empty = latest prerelease)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# Distinct original runs may build independently; duplicate requests for one
+# source run serialize and the immutable claim makes all but the winner skip.
+concurrency:
+  group: windows-handoff-${{ github.event.workflow_run.id || github.run_id }}-${{ github.event.workflow_run.run_attempt || github.run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      ((github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       startsWith(github.event.workflow_run.display_title, '3DSX ['))
+    runs-on: [self-hosted, Windows, X64, kingdom-3ds-local]
+    permissions:
+      contents: write # atomic ownership claim; no source commits are created
+      actions: write # cancel only the claimed original run
+    timeout-minutes: 30
+    outputs:
+      proceed: ${{ steps.claim.outputs.proceed }}
+      sha: ${{ steps.claim.outputs.sha }}
+      publish: ${{ steps.claim.outputs.publish }}
+      release_name: ${{ steps.claim.outputs.release_name }}
+    steps:
+      # A workflow_run uses the trusted default branch for the controller.
+      # Never execute pull request code on the user's computer.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.sha }}
+          path: .handoff
+          persist-credentials: false
+      - name: Prepare Windows tools
+        shell: powershell
+        run: ./.handoff/tools/prepare_windows_runner.ps1
+      - name: Claim queued Linux build
+        id: claim
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          python .handoff/tools/runner_handoff.py windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/checkout@v7
+        if: steps.claim.outputs.proceed == 'true'
+        with:
+          ref: ${{ steps.claim.outputs.sha }}
+          persist-credentials: false
+      - name: Check Python syntax and the parity boundary
+        if: steps.claim.outputs.proceed == 'true'
+        shell: powershell
+        run: |
+          python -c "import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for folder in ['tools','tests'] for p in pathlib.Path(folder).rglob('*.py')]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/check_parity_boundary.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build kingdom.3dsx
+        if: steps.claim.outputs.proceed == 'true'
+        shell: powershell
+        run: |
+          python tools/build_release.py --sdk "$env:DEVKITPRO"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload the application
+        if: steps.claim.outputs.proceed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kingdom.3dsx
+          path: release/kingdom.3dsx
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: needs.build.outputs.proceed == 'true' && needs.build.outputs.publish == 'true'
+    runs-on: [self-hosted, Windows, X64, kingdom-3ds-local]
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-kingdom-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          persist-credentials: false
+      - name: Download the application
+        uses: actions/download-artifact@v8
+        with:
+          name: kingdom.3dsx
+          path: release
+      - name: Prepare Windows tools
+        shell: powershell
+        run: ./tools/prepare_windows_runner.ps1
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.build.outputs.sha }}
+          RELEASE_NAME: ${{ needs.build.outputs.release_name }}
+        run: |
+          python tools/publish_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
