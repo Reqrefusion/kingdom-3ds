@@ -26,9 +26,11 @@ jobs:
   build:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      ((github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
-       github.event.workflow_run.head_repository.full_name == github.repository &&
-       startsWith(github.event.workflow_run.display_title, '3DSX ['))
+      github.event.workflow_run.event == 'push' ||
+      github.event.workflow_run.event == 'workflow_dispatch'
+    # The controller validates repository, metadata and revision via REST before
+    # claiming/cancelling or checking out any source code. Requested-event
+    # payloads must not be used as a substitute for the full run response.
     runs-on: [self-hosted, Windows, X64, kingdom-3ds-local]
     permissions:
       contents: write # atomic ownership claim; no source commits are created
