@@ -1,0 +1,7 @@
+# click title to start
+30 mouse down
+32 mouse up
+200 key RIGHT down
+1400 key RIGHT up
+1500 key DOWN down
+1502 key DOWN up

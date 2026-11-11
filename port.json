@@ -1,0 +1,19 @@
+{
+  "_about": "Project settings read by tools/port.py and tools/build_release.py. To port ANOTHER Flash game, copy this repository and change these values (see PORTING_GUIDE.md).",
+  "name": "kingdom",
+  "product": "kingdom",
+  "title": "Kingdom",
+  "data_root": "sdmc:/3ds/kingdom-3ds",
+  "original_repo": "noio/kingdom",
+  "original_commit": "56d4e622461b72df8fa8f69d09fbd63dab7a1346",
+  "source_dir": "work/kingdom-56d4e622461b72df8fa8f69d09fbd63dab7a1346",
+  "swf": "",
+  "assets": "translit_assets",
+  "host_exe": "kingdom_host.exe",
+  "devkitpro": "C:/devkitPro",
+  "azahar_exe": "",
+  "azahar_sdmc": "%APPDATA%/Azahar/sdmc",
+  "ruffle_exe": "",
+  "msvc_vcvars": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/vcvars64.bat",
+  "min_static_match_percent": 87.0
+}

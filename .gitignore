@@ -1,0 +1,20 @@
+# generated or downloaded: rebuilt by tools/build_release.py
+translit_assets/
+work/
+release/
+out/
+build3ds/
+build_host/
+parity_root/
+captures/
+logs/
+__pycache__/
+*.pyc
+*.3dsx
+*.smdh
+*.elf
+*.o
+*.obj
+*.exe
+*.zip
+*.log

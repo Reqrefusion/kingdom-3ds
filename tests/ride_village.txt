@@ -1,0 +1,5 @@
+# title click then ride right to the village
+30 mouse down
+32 mouse up
+200 key RIGHT down
+2400 key RIGHT up

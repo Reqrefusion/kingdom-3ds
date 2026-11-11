@@ -1,0 +1,8 @@
+30 mouse down
+32 mouse up
+210 key RIGHT down
+630 key RIGHT up
+640 key RIGHT down
+1050 key RIGHT up
+1060 key RIGHT down
+1470 key RIGHT up
