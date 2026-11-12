@@ -57,7 +57,7 @@ uint32_t Gpu3ds_uploadedBytes; /* texture bytes uploaded this frame (perf overla
 
 /* upload diagnostics: which bitmaps are re-uploaded (runtime.log) */
 #define UPSTAT_N 24
-static struct { const BitmapData *bd; int w, h; uint32_t count; } upStat[UPSTAT_N];
+static struct { const BitmapData *bd; int w, h; bool sparse, narrow; uint32_t count; } upStat[UPSTAT_N];
 static void upstat_add(const BitmapData *bd)
 {
 	int i;
@@ -66,6 +66,9 @@ static void upstat_add(const BitmapData *bd)
 	if (i == UPSTAT_N)
 		return;
 	upStat[i].bd = bd, upStat[i].w = bd->width, upStat[i].h = bd->height;
+	/* copy the flags now: the bitmap may be freed before the report is printed */
+	upStat[i].sparse = bd->gpuSparse >= 0;
+	upStat[i].narrow = bd->gpu && ((Tex *)bd->gpu)->narrow;
 	upStat[i].count++;
 }
 void Gpu3ds_uploadReport(FILE *f, uint32_t frames)
@@ -73,8 +76,8 @@ void Gpu3ds_uploadReport(FILE *f, uint32_t frames)
 	fprintf(f, "uploads per %lu frames:", (unsigned long)frames);
 	for (int i = 0; i < UPSTAT_N && upStat[i].bd != NULL; i++)
 		if (upStat[i].count > 1)
-			fprintf(f, " %dx%d%s%s=%lu", upStat[i].w, upStat[i].h, upStat[i].bd->gpuSparse >= 0 ? "s" : "",
-			        upStat[i].bd->gpu && ((Tex *)upStat[i].bd->gpu)->narrow ? "n" : "",
+			fprintf(f, " %dx%d%s%s=%lu", upStat[i].w, upStat[i].h, upStat[i].sparse ? "s" : "",
+			        upStat[i].narrow ? "n" : "",
 			        (unsigned long)upStat[i].count);
 	fputc('\n', f);
 	memset(upStat, 0, sizeof upStat);
