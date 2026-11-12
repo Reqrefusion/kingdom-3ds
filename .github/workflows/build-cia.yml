@@ -1,0 +1,41 @@
+name: Build CIA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cia:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install the conversion tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ffmpeg python3-pil ca-certificates curl unzip
+      - name: Make sure the 3DS libraries are present
+        run: dkp-pacman -S --noconfirm --needed 3ds-citro2d 3ds-citro3d libctru || true
+      - name: Build the game (also leaves the ELF and the media for the CIA)
+        run: python3 tools/build_release.py --sdk /opt/devkitpro
+      - name: Get makerom and bannertool
+        run: |
+          curl -fsSL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
+          unzip -o makerom.zip makerom
+          curl -fsSL https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.3/bannertool-1.2.3-linux.tar.gz | tar xz
+          chmod +x makerom bannertool-1.2.3-linux/bannertool
+      - name: Make kingdom.cia
+        run: python3 tools/make_cia.py --makerom ./makerom --bannertool ./bannertool-1.2.3-linux/bannertool
+      - name: Upload the CIA
+        uses: actions/upload-artifact@v7
+        with:
+          name: kingdom.cia
+          path: release/kingdom.cia
+          archive: false
+          if-no-files-found: error
+          retention-days: 30

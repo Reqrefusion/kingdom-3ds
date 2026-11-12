@@ -4,7 +4,7 @@
   python tools/export_repo.py --dest <path to your clone of kingdom-3ds>
 
 What goes in: the sources (as3/ flash/ flixel/ game/ platform/ tools/ tests/ vendor/), the docs, and the repository
-files from tools/repo_template/ (README, COPYRIGHT, .gitignore, .gitattributes, BUILD.cmd, CI workflow, port.json).
+files from tools/repo_template/ (README, COPYRIGHT, .gitignore, .gitattributes, BUILD.cmd, port.json).
 The LICENSE is the ORIGINAL Kingdom license (from the downloaded original repo in work/).
 What stays out: build output, captures, downloaded or converted media, executables, the old prototype's files.
 
@@ -27,19 +27,15 @@ SKIP_NAMES = {"__pycache__", "repo_template", "parity_root", "captures", "build_
 SKIP_SUFFIX = {".exe", ".obj", ".o", ".pyc", ".elf", ".3dsx", ".smdh", ".zip", ".log"}
 ROOT_FILES = {  # source -> destination (relative to the repository root)
     "assets.sha256.json": "assets.sha256.json",
-    "PORTING_GUIDE.md": "PORTING_GUIDE.md",
-    "AGENTS.md": "AGENTS.md",
+    "PORTING_GUIDE.md": "docs/PORTING_GUIDE.md",
     "host.mk": "host.mk",
     "PARITY_REPORT.md": "docs/PARITY_REPORT.md",
-    "STATIC_COMPARISON.md": "docs/STATIC_COMPARISON.md",
-    "FEATURE_MATRIX.md": "docs/FEATURE_MATRIX.md",
-    "README.md": "docs/TECHNICAL.md",
-    "CLAUDE.md": "docs/DEVELOPMENT_NOTES.md",
 }
 TEMPLATE_FILES = {
     "README.md": "README.md", "COPYRIGHT.md": "COPYRIGHT.md", "BUILD.cmd": "BUILD.cmd", "port.json": "port.json",
     "dot-gitignore": ".gitignore", "dot-gitattributes": ".gitattributes",
-    "workflows/build-3dsx.yml": ".github/workflows/build-3dsx.yml", "docs/BUILDING.md": "docs/BUILDING.md",
+    "workflows/build-3dsx.yml": ".github/workflows/build-3dsx.yml",
+    "workflows/build-cia.yml": ".github/workflows/build-cia.yml", "docs/BUILDING.md": "docs/BUILDING.md",
 }
 NOTE = ("> Internal working notes of the development (in Turkish). They mention paths of the original workspace "
         "(`../source`, `../work`, `captures/`); the repository itself needs none of them.\n\n")

@@ -40,7 +40,7 @@ def build(sdk: Path, product="kingdom_translit", title="Kingdom (translit)", dat
     Image.open(ROOT / "tools/icon.png").resize((48, 48), Image.NEAREST).save(icon)
     smdh = work / f"{product}.smdh"
     subprocess.run([str(sdk / ("tools/bin/smdhtool" + suffix)), "--create", title,
-                    "Line-by-line C translation of noio's Kingdom", "noio / port", str(icon), str(smdh)], check=True)
+                    "Kingdom 3DS port", "noio", str(icon), str(smdh)], check=True)
     out = ROOT / f"out/{product}.3dsx"
     out.parent.mkdir(exist_ok=True)
     subprocess.run([str(sdk / ("tools/bin/3dsxtool" + suffix)), str(elf), str(out), f"--smdh={smdh}"] +
