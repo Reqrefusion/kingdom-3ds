@@ -6,6 +6,7 @@
  * Script lines:  <frame> key <NAME> down|up   or   <frame> mouse down|up
  */
 #include "../../game/game.h"
+#include "npc_trace.h"
 #include "../common/session.h"
 #include "../common/stereo.h"
 #include "../common/parallel.h"
@@ -287,6 +288,7 @@ int main(int argc, char **argv)
 				((Player *)ps->player)->coins, ps->phase, ps->day.value, FlxGroup_countLiving(ps->beggars),
 				FlxGroup_countLiving(ps->characters), FlxGroup_countLiving(ps->trolls), FlxGroup_countLiving(ps->bunnies),
 				FlxG.camera->scroll.x);
+			npc_trace_frame(ps, frame); /* KINGDOM_NPC_TRACE=file: every NPC (npc_trace.h) */
 		} else
 			fprintf(trace, "%u,%s,%.17g,,,,,,,,,\n", frame, state, FlxG.globalSeed);
 		bool shot = pngEvery && frame % pngEvery == 0 && FlxG.camera;

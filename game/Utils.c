@@ -21,15 +21,15 @@ void Utils_gradientOverlay(BitmapData *bitmap, const uint32_t *colors, uint32_t 
 {
 	Matrix matrix = Matrix_new();
 	Matrix_createGradientBox(&matrix, (Number)bitmap->width / chunks, (Number)bitmap->height / chunks, rotation * Utils_DEG_TO_RAD, 0, 0);
-	Shape *s = Shape_new();
+	NativeShape *s = NativeShape_new();
 	Number ratios[SHAPE_MAX_STOPS];
 	Number alphas[SHAPE_MAX_STOPS];
 	for (int32_t i = 0; (uint32_t)i < colorsLength; i++) {
 		alphas[i] = (AS3_SHR(colors[i], 24)) / 255.0;
 		ratios[i] = (i * (1.0 / (colorsLength - 1))) * 255;
 	}
-	Graphics_beginGradientFill(&s->graphics, "linear", colors, alphas, ratios, colorsLength, &matrix, "pad", "rgb");
-	Graphics_drawRect(&s->graphics, 0, 0, (Number)bitmap->width / chunks, (Number)bitmap->height / chunks);
+	NativeGraphics_beginGradientFill(&s->graphics, "linear", colors, alphas, ratios, colorsLength, &matrix, "pad", "rgb");
+	NativeGraphics_drawRect(&s->graphics, 0, 0, (Number)bitmap->width / chunks, (Number)bitmap->height / chunks);
 	if (chunks == 1) {
 		BitmapData_drawShape(bitmap, s, NULL);
 	} else {

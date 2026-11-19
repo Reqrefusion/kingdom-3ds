@@ -28,12 +28,25 @@ typedef struct Minimap Minimap;
 Number Math_random(void);
 void Math_random_seed(uint32_t seed);
 
-/* mochi.as3.MochiDigits: an obfuscated int (anti-cheat). Same value. */
+/* mochi.as3.MochiDigits: an obfuscated int (anti-cheat). Same value, kept plain here. BUT the
+   original re-encodes on every change: setValue makes one MochiDigits per character of
+   digit.toString() and each calls reencode(), which calls Math.random() once. The plain int left
+   those calls out, so after the first new day Math.random's sequence was different from the
+   original (found by comparing with the as2c translation, ../kingdomgen-3ds/tests/compare_kingdom.py:
+   night_click split at frame 8319). The same calls are made here, so the random numbers match. */
 typedef struct MochiDigits {
 	int32_t value;
 } MochiDigits;
-static inline void MochiDigits_addValue(MochiDigits *d, int32_t v) { d->value += v; }
-static inline void MochiDigits_setValue(MochiDigits *d, int32_t v) { d->value = v; }
+static inline void MochiDigits_reencodeAll(int32_t v)
+{
+	char s[16];
+	int n = snprintf(s, sizeof s, "%ld", (long)v); /* Number(v).toString() of an int */
+	for (int i = 0; i < n; i++)
+		(void)Math_random(); /* reencode(): int(0x7FFFFFFF * Math.random()) */
+}
+static inline void MochiDigits_setValue(MochiDigits *d, int32_t v) { d->value = v; MochiDigits_reencodeAll(v); }
+static inline void MochiDigits_addValue(MochiDigits *d, int32_t v) { MochiDigits_setValue(d, d->value + v); }
+static inline MochiDigits MochiDigits_new(int32_t v) { MochiDigits d; MochiDigits_setValue(&d, v); return d; }
 
 /* ---- com.quasimondo.geom.ColorMatrix ------------------------------------- */
 

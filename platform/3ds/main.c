@@ -218,6 +218,7 @@ int main(void)
 	static struct { uint32_t frame; bool mouse, down; char key[16]; } script[256];
 	int scriptCount = 0, scriptNext = 0;
 	bool autotest = false, forceCpu = false;
+	bool autoSave = false; /* "save 1": write progress.sav in an autotest too (tests the writer thread) */
 	uint32_t freezeAt = 0;
 	Number autoSeed = 0.5;
 	static char autoProgress[128]; /* "progress D1 A4 ...": start as new PlayState(saved) */
@@ -239,6 +240,8 @@ int main(void)
 				freezeAt = fr;
 			else if (sscanf(line, "cpu %u", &fr) == 1)
 				forceCpu = fr != 0;
+			else if (sscanf(line, "save %u", &fr) == 1)
+				autoSave = fr != 0;
 			else if (sscanf(line, "weathermode %u", &fr) == 1)
 				Gpu3ds_weatherMode = (int)fr;
 			else if (scriptCount < 256 && sscanf(line, "%u %15s %15s %15s", &fr, kind, a, b) >= 3) {
@@ -444,8 +447,17 @@ int main(void)
 			updSum += upd;
 			if (upd > updMax)
 				updMax = upd;
-			if (!autotest)
+			/* the progress save at daybreak (session.c: written by a thread). A frame that
+			   waits here is a freeze the "game update" times do not show: logged */
+			if (!autotest || autoSave) {
+				u64 s0 = osGetTime();
 				Session_afterFrame(&session);
+				u64 waited = osGetTime() - s0;
+				if (waited > 5 && rlog != NULL) {
+					fprintf(rlog, "SAVE WAIT %llu ms at frame %lu\n", (unsigned long long)waited, (unsigned long)frames);
+					fflush(rlog);
+				}
+			}
 			if (++frames % 300 == 0 && rlog != NULL) {
 				u64 t = osGetTime();
 				fprintf(rlog, "frames %lu  fps %.1f  game update avg %.1f ms max %llu ms  state %s\n", (unsigned long)frames,

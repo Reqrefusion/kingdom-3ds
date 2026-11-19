@@ -94,7 +94,7 @@ PlayState *PlayState_new(const char *progress)
 	self->minBeggars = 0;
 	self->retreatDelay = 0;
 	self->gameover = false;
-	self->day = (MochiDigits){0};
+	self->day = MochiDigits_new(0); /* new MochiDigits(0): one Math.random() (game.h) */
 	self->trollHealth = 1;
 	self->trollMaxSpeed = 20;
 	self->trollJumpHeight = 20;

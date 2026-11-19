@@ -1,5 +1,8 @@
 #include "session.h"
 #include <sys/stat.h>
+#ifdef __3DS__
+#include <3ds.h>
+#endif
 
 bool FlashMediaBackend_musicEnabled = true;
 
@@ -17,6 +20,122 @@ static void logf_(Session *s, const char *fmt, const char *arg)
 		fflush(s->log);
 	}
 }
+
+/* ---- writes off the game loop -------------------------------------------------------
+   On a real 3DS replace_file is about a second: a tmp file, two renames and two removes, each a
+   FAT update of the SD card through the FS service. At every daybreak (a new savedProgress) the
+   game stopped for that long: runtime.log showed seconds at 3.6 fps while "game update" stayed
+   under 20 ms, since Session_afterFrame runs after the update. Azahar does not show it (its SD
+   card is a PC folder). So on the 3DS a thread does the writing; the game only copies the text.
+   A newer text for the same file replaces one not yet written. Session_close waits for it.
+   The PC runner writes at once (the same files, the same order). */
+enum { JOB_PROGRESS, JOB_SETTINGS, JOB_COUNT };
+
+/* text "" removes the file and its backup (a new game): queued like a write, so a write still
+   waiting cannot bring an old progress.sav back after it */
+static void do_job(Session *s, int kind, const char *p, const char *text)
+{
+	if (text[0] == 0) {
+		char bak[340];
+		snprintf(bak, sizeof bak, "%s.bak", p);
+		remove(p);
+		remove(bak);
+		return;
+	}
+	bool ok = replace_file(p, text);
+	if (kind == JOB_PROGRESS)
+		logf_(s, ok ? "progress.sav <- %s\n" : "progress.sav write FAILED: %s\n", text);
+}
+
+#ifdef __3DS__
+typedef struct WriteJob {
+	char path[320];
+	char text[256];
+	bool waiting;
+} WriteJob;
+
+static WriteJob jobs[JOB_COUNT];
+static LightLock jobLock;
+static LightEvent jobWake;
+static Thread writer;
+static volatile bool writerQuit;
+static Session *writerSession;
+
+static void writer_main(void *arg)
+{
+	(void)arg;
+	for (;;) {
+		LightEvent_Wait(&jobWake);
+		for (;;) {
+			WriteJob job;
+			int kind = -1;
+			LightLock_Lock(&jobLock);
+			for (int i = 0; i < JOB_COUNT && kind < 0; i++)
+				if (jobs[i].waiting) {
+					job = jobs[i];
+					jobs[i].waiting = false;
+					kind = i;
+				}
+			LightLock_Unlock(&jobLock);
+			if (kind < 0)
+				break;
+			do_job(writerSession, kind, job.path, job.text);
+		}
+		if (writerQuit)
+			break;
+	}
+}
+
+static void writer_start(Session *s)
+{
+	writerSession = s;
+	LightLock_Init(&jobLock);
+	LightEvent_Init(&jobWake, RESET_ONESHOT);
+	s32 prio = 0x30;
+	svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
+	/* one step below the game; it waits on the FS service most of the time, not on the CPU */
+	writer = threadCreate(writer_main, NULL, 16 * 1024, prio < 0x3F ? prio + 1 : 0x3F, -2, false);
+}
+
+static void queue_write(Session *s, int kind, const char *p, const char *text)
+{
+	if (writer == NULL) {
+		do_job(s, kind, p, text);
+		return;
+	}
+	LightLock_Lock(&jobLock);
+	snprintf(jobs[kind].path, sizeof jobs[kind].path, "%s", p);
+	snprintf(jobs[kind].text, sizeof jobs[kind].text, "%s", text);
+	jobs[kind].waiting = true;
+	LightLock_Unlock(&jobLock);
+	LightEvent_Signal(&jobWake);
+}
+
+static void writer_finish(void)
+{
+	if (writer == NULL)
+		return;
+	writerQuit = true;
+	LightEvent_Signal(&jobWake);
+	threadJoin(writer, U64_MAX);
+	threadFree(writer);
+	writer = NULL;
+}
+#else
+static void writer_start(Session *s)
+{
+	(void)s;
+}
+
+static void queue_write(Session *s, int kind, const char *p, const char *text)
+{
+	do_job(s, kind, p, text);
+}
+
+static void writer_finish(void)
+{
+}
+#endif
 
 void Session_init(Session *s, const char *dir)
 {
@@ -45,6 +164,7 @@ void Session_init(Session *s, const char *dir)
 		fclose(f);
 	}
 	FlashMediaBackend_musicEnabled = s->settings.music;
+	writer_start(s);
 }
 
 void Session_saveSettings(Session *s)
@@ -54,7 +174,7 @@ void Session_saveSettings(Session *s)
 	char text[64];
 	snprintf(text, sizeof text, "music %d stereo %d fill %d water %d", s->settings.music ? 1 : 0, s->settings.stereo,
 		s->settings.fill ? 1 : 0, s->settings.water3d);
-	replace_file(p, text); /* a failed write keeps the previous settings.cfg */
+	queue_write(s, JOB_SETTINGS, p, text); /* a failed write keeps the previous settings.cfg */
 }
 
 /* Writes text to dir/name through name.tmp. The previous file is kept as
@@ -97,13 +217,6 @@ static bool replace_file(const char *p, const char *text)
 	if (hadPrevious)
 		remove(bak);
 	return true;
-}
-
-static bool write_atomic(Session *s, const char *name, const char *text)
-{
-	char p[320];
-	path_of(s, p, sizeof p, name);
-	return replace_file(p, text);
 }
 
 /* one checkpoint file: true and the text in line when it is well-formed */
@@ -152,8 +265,9 @@ void Session_afterFrame(Session *s)
 	const char *p = ((PlayState *)FlxG.state)->savedProgress;
 	if (p != NULL && strcmp(p, s->lastSaved) != 0) {
 		snprintf(s->lastSaved, sizeof s->lastSaved, "%s", p);
-		bool ok = write_atomic(s, "progress.sav", p);
-		logf_(s, ok ? "progress.sav <- %s\n" : "progress.sav write FAILED: %s\n", p);
+		char path[320];
+		path_of(s, path, sizeof path, "progress.sav");
+		queue_write(s, JOB_PROGRESS, path, p); /* the 3DS: by the writer thread (no freeze at daybreak) */
 	}
 }
 
@@ -161,9 +275,7 @@ static void new_game(Session *s)
 {
 	char p[320];
 	path_of(s, p, sizeof p, "progress.sav");
-	remove(p);
-	strcat(p, ".bak");
-	remove(p);
+	queue_write(s, JOB_PROGRESS, p, ""); /* removes progress.sav(.bak), after a write still waiting */
 	s->lastSaved[0] = 0;
 	logf_(s, "%s\n", "new game");
 	FlxG_switchState((FlxState *)PlayState_new(NULL));
@@ -259,6 +371,7 @@ void Session_drawMenu(Session *s, BitmapData *dst)
 void Session_close(Session *s)
 {
 	Session_saveSettings(s);
+	writer_finish(); /* every queued file on the card before the log is closed */
 	if (s->log)
 		fclose(s->log);
 	s->log = NULL;
